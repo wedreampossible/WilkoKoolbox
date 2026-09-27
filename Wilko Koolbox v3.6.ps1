@@ -172,7 +172,7 @@ function Show-Menu {
     Write-Host '        All-In-One Dev & Gaming Environment Builder      ' -ForegroundColor DarkGray
     Write-Host '=========================================================' -ForegroundColor Cyan
     Write-Host ' [1]  System : Disable Driver Auto-Installs & Bloatware'
-    Write-Host ' [2]  System : Block ASUS Services & WPBT BIOS Injections'
+    Write-Host ' [2]  System : Block WPBT BIOS Injection (all vendors)'
     Write-Host ' [3]  System : Block Telemetry & Compatibility Appraiser'
     Write-Host ' [V]  Vendor : Auto-Detect & Remove OEM Bloat (HP/Dell/Lenovo/MSI/Acer/ASUS)'
     Write-Host ' [4]  Dev    : Install Git, Wget, cURL, VS Code'
@@ -226,17 +226,10 @@ function Task-Drivers {
     Write-Log 'Task 1: Driver auto-installs and consumer bloat disabled'
 }
 
-function Task-ASUS {
+function Task-WPBT {
     Set-Reg 'HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager' 'DisableWpbtExecution' 1
-    $svcs = Get-Service -Name 'ArmouryCrateControlInterface','ASUSSystemAnalysis','ASUSSystemControlService','AsusAppService' -ErrorAction SilentlyContinue
-    foreach ($s in $svcs) {
-        Stop-Service -Name $s.Name -Force -ErrorAction SilentlyContinue
-        Set-Service -Name $s.Name -StartupType Disabled -ErrorAction SilentlyContinue
-        Write-Host "     [i] Disabled: $($s.Name)" -ForegroundColor DarkGray
-    }
-    if (-not $svcs) { Write-Host '     [i] No ASUS services detected' -ForegroundColor DarkGray }
-    Write-Host ' [OK] WPBT execution blocked, ASUS services disabled' -ForegroundColor Green
-    Write-Log 'Task 2: WPBT execution blocked, ASUS services disabled'
+    Write-Host ' [OK] WPBT BIOS execution blocked (applies to all vendors)' -ForegroundColor Green
+    Write-Log 'Task 2: WPBT execution blocked (generic)'
 }
 # ---------- Vendor Bloat Module (v3.7) ----------
 function Get-MachineManufacturer {
@@ -282,7 +275,7 @@ function Disable-VendorServices {
 function Task-VendorBloat {
     $mfg = Get-MachineManufacturer
     Write-Host " [i] Detected manufacturer: $mfg" -ForegroundColor Cyan
-    Disable-VendorServices -VendorName 'ASUS|ASUSTeK' -ServiceNames @('ArmouryCrateControlInterface','AsusAppService')
+    Disable-VendorServices -VendorName 'ASUS|ASUSTeK' -ServiceNames @('ArmouryCrateControlInterface','ASUSSystemAnalysis','ASUSSystemControlService','AsusAppService')
     Disable-VendorServices -VendorName 'HP|Hewlett-Packard' -ServiceNames @('HpTouchpointAnalyticsService','HPAppHelperCap','HPDiagsCap','HPSysInfoCap','hpsysdrv')
     Disable-VendorServices -VendorName 'Dell' -ServiceNames @('Dell SupportAssistAgent','DellTechHub','DPMConnector','DellDigitalDelivery','SupportAssistAgent')
     Disable-VendorServices -VendorName 'Lenovo' -ServiceNames @('ImControllerService','LenovoVantageService','LenovoUtilityService')
@@ -517,8 +510,8 @@ function Task-Status {
     $svcList = Get-Service -Name 'ArmouryCrateControlInterface','ASUSSystemAnalysis','ASUSSystemControlService','AsusAppService' -ErrorAction SilentlyContinue
     $asusRunning = 0
     foreach ($s in $svcList) { if ($s.Status -eq 'Running') { $asusRunning++ } }
-    Write-Host ' ASUS services: ' -NoNewline
-    if ($asusRunning -gt 0) { Write-Host "$asusRunning still RUNNING (run task 2)" -ForegroundColor Red } else { Write-Host ' none running / none found' -ForegroundColor Green }
+    Write-Host ' Vendor (ASUS) services: ' -NoNewline
+    if ($asusRunning -gt 0) { Write-Host "$asusRunning still RUNNING (run task V)" -ForegroundColor Red } else { Write-Host ' none running / none found' -ForegroundColor Green }
     Write-Host (' Detected manufacturer: {0}' -f (Get-MachineManufacturer))
 
     $telem = Get-RegVal 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\DataCollection' 'AllowTelemetry'
@@ -632,7 +625,7 @@ function Invoke-UninstallChoice($act) {
 function Invoke-Choice($act) {
     switch ($act) {
         '1'  { Task-Drivers }
-        '2'  { Task-ASUS }
+        '2'  { Task-WPBT }
         '3'  { Task-Telemetry }
         'V'  { Task-VendorBloat }
         '4'  { Task-DevBasics }
@@ -652,7 +645,7 @@ function Invoke-Choice($act) {
 # ---------- Main loop (v3.5 UPGRADE: ordered hashtable dispatcher) ----------
 $actions = [ordered]@{
     "1"  = @{ Name = "Disable Driver Auto-Installs & Bloatware";   Cmd = { Task-Drivers } }
-    "2"  = @{ Name = "Block ASUS Services & WPBT BIOS Injections"; Cmd = { Task-ASUS } }
+    "2"  = @{ Name = "Block WPBT BIOS Injection (all vendors)";    Cmd = { Task-WPBT } }
     "3"  = @{ Name = "Block Telemetry & Compatibility Appraiser"; Cmd = { Task-Telemetry } }
     "V"  = @{ Name = "Vendor Bloat Removal";                       Cmd = { Task-VendorBloat } }
     "4"  = @{ Name = "Install Dev Basics";                       Cmd = { Task-DevBasics } }

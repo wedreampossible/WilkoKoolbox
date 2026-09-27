@@ -5,6 +5,7 @@ The main script is `Wilko Koolbox v3.6.ps1`.
 ## What's new in v3.7
 - Adds the Vendor Bloat Module: one `V` menu action detects ASUS, HP, Dell, Lenovo, MSI, or Acer hardware and disables only the matching OEM services.
 - Each vendor check self-skips when its hardware manufacturer is not detected, so the same action is safe to run across supported vendors.
+- The `V` action includes ASUS service disabling; Task `2` now blocks WPBT BIOS injection independently for every manufacturer.
 ## What's new in v3.6
 - Reconciles the repository with the canonical v3.5 Koolbox source while preserving its full menu, system-task, performance, status-panel, and hardware-monitor functionality.
 - Adds resilient activity logging: Koolbox tries the Desktop first, then `%LOCALAPPDATA%\WilkoKoolbox`, then `%TEMP%`; it disables logging gracefully if no destination is writable.
@@ -13,7 +14,7 @@ The main script is `Wilko Koolbox v3.6.ps1`.
 
 ## Features
 - Disables Windows driver searching, Windows Update driver delivery, and consumer-feature suggestions.
-- Blocks WPBT execution and disables selected ASUS/Armoury Crate services when present.
+- Blocks WPBT execution for all vendors; the `V` action disables matching ASUS/Armoury Crate services when ASUS hardware is detected.
 - Applies telemetry-related registry policies, disables selected telemetry services, and disables compatibility-appraiser tasks.
 - Installs developer tools through `winget`:
   - Git, Wget, cURL, and Visual Studio Code
@@ -51,7 +52,7 @@ Enter a single menu key, a comma-separated set of keys such as `4,5,8`, or `A` t
 
 ## Main-menu reference
 - `1` — Disable automatic driver delivery and consumer-feature suggestions.
-- `2` — Block WPBT execution and disable detected ASUS services.
+- `2` — Block WPBT BIOS injection for all vendors.
 - `3` — Configure telemetry policies, selected services, and compatibility tasks.
 - `V` — Auto-detect the system manufacturer and remove matching ASUS, HP, Dell, Lenovo, MSI, or Acer OEM bloat services.
 - `4` — Install Git, Wget, cURL, and VS Code.
