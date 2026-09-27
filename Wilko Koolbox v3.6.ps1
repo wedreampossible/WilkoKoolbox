@@ -129,8 +129,9 @@ function Get-GHelperMode {
     if (-not (Test-Path -LiteralPath $cfg)) { return $null }
     try {
         $json = Get-Content -LiteralPath $cfg -Raw | ConvertFrom-Json
-        $names = @('Balanced', 'Turbo', 'Silent')
-        if ($null -ne $json.mode -and $json.mode -ge 0 -and $json.mode -le 2) { return $names[[int]$json.mode] }
+        $val = if ($null -ne $json.performance_mode) { $json.performance_mode } else { $json.mode }
+        $names = @('Balanced', 'Turbo', 'Silent')   # verified: performance_mode 1 = Turbo on this hardware
+        if ($null -ne $val -and $val -ge 0 -and $val -lt $names.Count) { return $names[[int]$val] }
     } catch { }
     return $null
 }
@@ -411,22 +412,26 @@ function Task-Specs {
     Write-Host "`n HARDWARE" -ForegroundColor Magenta
     Write-Host (' CPU: {0} ({1} cores / {2} threads)' -f $cpu.Name.Trim(), $cpu.NumberOfCores, $cpu.NumberOfLogicalProcessors)
     foreach ($g in $gpus) {
+        $cleanName = "$($g.Name)".Trim()
         $vram = $null
-        $cleanName = $g.Name.Trim()
-        $idx = 0
-        while ($idx -lt 16) {
-            try {
-                $regKey = Get-ItemProperty -Path ('HKLM:\SYSTEM\CurrentControlSet\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}\{0:d4}' -f $idx) -ErrorAction Stop
-                $desc = "$($regKey.DriverDesc)".Trim()
-                if ($desc -and $cleanName -and ($desc -like "*$cleanName*" -or $cleanName -like "*$desc*")) {
-                    if ($regKey.'HardwareInformation.qwMemorySize') { $vram = [math]::Round($regKey.'HardwareInformation.qwMemorySize' / 1GB); break }
-                    if ($regKey.'HardwareInformation.MemorySize')   { $vram = [math]::Round($regKey.'HardwareInformation.MemorySize' / 1GB); break }
-                }
-            } catch { }
-            $idx++
+        if ($cleanName) {
+            $idx = 0
+            while ($idx -lt 16) {
+                try {
+                    $regKey = Get-ItemProperty -LiteralPath ('HKLM:\SYSTEM\CurrentControlSet\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}\{0:d4}' -f $idx) -ErrorAction Stop
+                    $desc = "$($regKey.DriverDesc)".Trim()
+                    if ($desc -and ($desc -like "*$cleanName*" -or $cleanName -like "*$desc*")) {
+                        $rawQw = $regKey.'HardwareInformation.qwMemorySize'
+                        $rawMem = $regKey.'HardwareInformation.MemorySize'
+                        if ($rawQw -isnot [array] -and $rawQw) { $vram = [math]::Round([int64]$rawQw / 1GB); break }
+                        if ($rawMem -isnot [array] -and $rawMem) { $vram = [math]::Round([int64]$rawMem / 1GB); break }
+                    }
+                } catch { }
+                $idx++
+            }
         }
-        if ($vram) { Write-Host (' GPU: {0} ({1} GB VRAM)' -f $g.Name.Trim(), $vram) }
-        else       { Write-Host (' GPU: {0}' -f $g.Name.Trim()) }
+        if ($vram) { Write-Host (' GPU: {0} ({1} GB VRAM)' -f $cleanName, $vram) }
+        else       { Write-Host (' GPU: {0}' -f $cleanName) }
     }
     Write-Host (' RAM: {0:N1} GB total' -f ($ram.TotalPhysicalMemory / 1GB))
     foreach ($d in $disks) { Write-Host (' DISK: {0} - {1:N0} GB ({2})' -f $d.FriendlyName, ($d.Size / 1GB), $d.MediaType) }
@@ -437,10 +442,13 @@ function Task-Specs {
     Write-Host ' Performance manager: ' -NoNewline
     if (Test-GHelper) {
         $ghMode = Get-GHelperMode
-        if ($ghMode) { Write-Host "GHelper (active, $ghMode profile - firmware level)" -ForegroundColor Green }
-        else         { Write-Host 'GHelper (active - firmware level)' -ForegroundColor Green }
-    } else { Write-Host 'Windows native' -ForegroundColor Yellow }
-    Write-Host (' Windows power scheme: {0}' -f (Get-ActivePlanName))
+        $modeText = if ($ghMode) { "GHelper ($ghMode profile - firmware level)" } else { 'GHelper (active - firmware level)' }
+        Write-Host $modeText -ForegroundColor Green
+        Write-Host (" Windows power scheme: {0} (OS layer - GHelper governs performance)" -f (Get-ActivePlanName)) -ForegroundColor DarkGray
+    } else {
+        Write-Host 'Windows native' -ForegroundColor Yellow
+        Write-Host (" Windows power scheme: {0}" -f (Get-ActivePlanName))
+    }
     Write-Host ' Windows power slider (overlay): Settings > System > Power' -ForegroundColor DarkGray
 
     Write-Host "`n LIVE MONITOR (updates every 2s - press Q to stop)" -ForegroundColor Magenta
@@ -521,18 +529,20 @@ function Task-Status {
     Write-Host "`n POWER & GAMING" -ForegroundColor Magenta
     $plan = Get-ActivePlanName
     $ghelperOn = Test-GHelper
-    Write-Host ' Windows power scheme: ' -NoNewline
-    if ($plan -like '*Ultimate*') {
-        Write-Host "$plan [OK]" -ForegroundColor Green
-    } elseif ($ghelperOn) {
-        Write-Host "$plan (managed by GHelper - its profile sets the scheme)" -ForegroundColor Cyan
-    } else {
-        Write-Host "$plan (run task 10 for Ultimate Performance)" -ForegroundColor Yellow
-    }
+    Write-Host ' Performance manager: ' -NoNewline
     if ($ghelperOn) {
         $ghMode = Get-GHelperMode
-        if ($ghMode) { Write-Host " Performance manager: GHelper (active, $ghMode profile - firmware level)" -ForegroundColor Green }
-        else         { Write-Host ' Performance manager: GHelper (active - firmware level)' -ForegroundColor Green }
+        $modeText = if ($ghMode) { "GHelper ($ghMode profile - firmware level)" } else { 'GHelper (active - firmware level)' }
+        Write-Host $modeText -ForegroundColor Green
+        Write-Host (" Windows power scheme: {0} (OS layer - GHelper governs performance)" -f $plan) -ForegroundColor DarkGray
+    } else {
+        if ($plan -like '*Ultimate*') {
+            Write-Host "$plan [OK]" -ForegroundColor Green
+        } else {
+            Write-Host "$plan (run task 10 for Ultimate Performance)" -ForegroundColor Yellow
+        }
+    }
+    if ($ghelperOn) {
         Write-Host ' Info: the Settings > Power slider is a separate layer ON TOP of the scheme.' -ForegroundColor DarkGray
         Write-Host '       Balanced + Best Performance + GHelper Turbo = max perf anyway.' -ForegroundColor DarkGray
     }
