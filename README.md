@@ -1,7 +1,7 @@
-# Wilko Koolbox v3.5
+# Wilko Koolbox v3.6
 Wilko Koolbox is an elevated PowerShell menu for configuring a Windows development and gaming workstation. It combines optional system preferences, developer-tool installation, game-engine setup, runtime installation, power-profile configuration, package management, and basic hardware monitoring.
 
-The main script is `Wilko Koolbox v3.ps1`.
+The main script is `Wilko Koolbox v3.6.ps1`.
 
 ## Features
 - Disables Windows driver searching, Windows Update driver delivery, and consumer-feature suggestions.
@@ -21,19 +21,19 @@ The main script is `Wilko Koolbox v3.ps1`.
 ## Requirements
 - Windows 10 or Windows 11.
 - Windows PowerShell 5.1 or newer.
-- Run the script from an **Administrator** PowerShell window.
+- The script verifies elevation at startup and stops if it is not elevated. Start it with **Run as administrator** and approve the Windows UAC prompt.
 - Internet access for package installation and updates.
 - `winget` / App Installer for package-related tasks.
 - Access to the PowerShell Gallery only when using the compile option for the first time; it installs `ps2exe` for the current user.
 
 ## Usage
-1. Save `Wilko Koolbox v3.ps1` locally.
+1. Save `Wilko Koolbox v3.6.ps1` locally.
 2. Open PowerShell as Administrator.
 3. Run the script:
 
 ```powershell
 Set-ExecutionPolicy -Scope Process Bypass
-& "C:\Users\Administrator\Wilko Koolbox v3.ps1"
+& "C:\Users\Administrator\WilkoKoolbox\Wilko Koolbox v3.6.ps1"
 ```
 
 4. Enter a single menu key, a comma-separated set of keys such as `4,5,8`, or `A` to run installation tasks 1–10.
