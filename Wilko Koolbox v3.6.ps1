@@ -193,15 +193,16 @@ function Show-Menu {
     Write-Host '=========================================================' -ForegroundColor Cyan
 }
 
-function Show-UninstallMenu {
+function Show-PackageMenu {
     Clear-Host
     Write-Host '=========================================================' -ForegroundColor Cyan
     Write-Host '                 PACKAGE MANAGEMENT MENU                 ' -ForegroundColor White
     Write-Host '=========================================================' -ForegroundColor Cyan
-    Write-Host ' UPDATE ALL INSTALLED PACKAGES'
-    Write-Host ' [U]  winget upgrade --all (update everything)'
+    Write-Host ' UPDATE KOOLBOX-MANAGED SOFTWARE' -ForegroundColor Green
+    Write-Host ' [U]  Update Koolbox-installed free software' -ForegroundColor Green
+    Write-Host '      Koolbox only updates free software it installed.' -ForegroundColor DarkGreen
     Write-Host ''
-    Write-Host ' UNINSTALL INDIVIDUAL PACKAGES:' -ForegroundColor Magenta
+    Write-Host ' UNINSTALL SOFTWARE' -ForegroundColor Magenta
     Write-Host ' [1]  Git'
     Write-Host ' [2]  Wget'
     Write-Host ' [3]  cURL'
@@ -744,7 +745,7 @@ do {
 
     if ($choice -ieq 'U') {
         do {
-            Show-UninstallMenu
+            Show-PackageMenu
             $sub = (Read-Host "`nSelect option").Trim()
             if ($sub -ieq 'B') { break }
             if ($sub -ieq 'Q') { Exit }
