@@ -1,4 +1,4 @@
-# ============================================================
+﻿# ============================================================
 #  WILKO KOOLBOX v3.7 - All-In-One Dev & Gaming Environment
 #  PS 5.1 | GHelper-aware | Triple-layer power detection
 #  Changelog v3.7:
@@ -485,9 +485,75 @@ function Task-Specs {
 }
 
 function Task-UpdateAll {
-    Write-Host ' [*] Updating all installed packages...' -ForegroundColor Yellow
-    winget upgrade --all --accept-package-agreements --accept-source-agreements
-    Write-Log "Update All: packages upgraded (exit $LASTEXITCODE)"
+    if (-not (Get-Command winget.exe -ErrorAction SilentlyContinue)) {
+        Write-Host ' [!] winget is not available. Install/update App Installer from Microsoft Store.' -ForegroundColor Red
+        Write-Log 'Update allowlist unavailable: winget not found'
+        return
+    }
+
+    $allowlist = @(
+        'Git.Git',
+        'JernejSimoncic.Wget',
+        'curl.curl',
+        'Microsoft.VisualStudioCode',
+        'Python.Python.3.12',
+        'Google.PlatformTools',
+        'Google.AndroidStudio',
+        'Unity.UnityHub',
+        'GodotEngine.GodotEngine',
+        'Microsoft.VCRedist.2015+.x64',
+        'Microsoft.VCRedist.2015+.x86',
+        'Microsoft.DotNet.DesktopRuntime.8',
+        'Microsoft.DirectX',
+        'KhronosGroup.OpenXR-Tools'
+    )
+    $benignCodes = @(0, -1978335189, -1978334956, -1978335182)
+
+    Write-Host ' [*] Updating Koolbox-managed software only...' -ForegroundColor Green
+    foreach ($id in $allowlist) {
+        Write-Host "     -> Updating $id ..." -ForegroundColor DarkGray
+        try {
+            & winget.exe upgrade --id $id -e --silent --accept-package-agreements --accept-source-agreements
+            $exitCode = $LASTEXITCODE
+            if ($exitCode -in $benignCodes) {
+                Write-Host "     [OK] $id current or updated" -ForegroundColor Green
+                Write-Log "UPDATE SUCCESS/NO-OP: $id (exit $exitCode)"
+            } else {
+                Write-Host "     [!] $id update returned exit code $exitCode; continuing" -ForegroundColor Yellow
+                Write-Log "UPDATE FAILED: $id (exit $exitCode)"
+            }
+        } catch {
+            Write-Host "     [!] $id update failed: $($_.Exception.Message); continuing" -ForegroundColor Yellow
+            Write-Log "UPDATE ERROR: $id ($($_.Exception.Message))"
+        }
+    }
+
+    Write-Host ' [i] Visual Studio updates via its own installer - skipped.' -ForegroundColor Yellow
+    Write-Log 'UPDATE SKIPPED: Microsoft.VisualStudio.2022.Community (own installer)'
+    $otherUpdateCountAvailable = $false
+    $otherUpdates = 0
+    try {
+        $upgradeHelp = (& winget.exe upgrade --help 2>$null | Out-String)
+        if ($upgradeHelp -notmatch '--output' -or $upgradeHelp -notmatch 'json') {
+            throw 'Installed winget does not support JSON upgrade output.'
+        }
+        $upgradeJson = (& winget.exe upgrade --output json --accept-source-agreements 2>$null | Out-String)
+        $upgradeData = $upgradeJson | ConvertFrom-Json -ErrorAction Stop
+        $availableIds = @(
+            $upgradeData.Sources |
+                ForEach-Object { $_.Packages } |
+                ForEach-Object { $_.PackageIdentifier }
+        )
+        $otherUpdates = @($availableIds | Where-Object { $_ -and $_ -notin $allowlist }).Count
+        $otherUpdateCountAvailable = $true
+    } catch {
+        Write-Log "UPDATE NOTICE: Could not count non-Koolbox upgrades ($($_.Exception.Message))"
+    }
+    if ($otherUpdateCountAvailable) {
+        Write-Host " $otherUpdates other updates exist on this system (non-Koolbox software - run 'winget upgrade' manually for those)." -ForegroundColor DarkGray
+    } else {
+        Write-Host " Other non-Koolbox updates may exist - run 'winget upgrade' to review." -ForegroundColor DarkGray
+    }
 }
 
 # ---------- Status panel ----------
