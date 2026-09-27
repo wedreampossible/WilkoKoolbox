@@ -26,22 +26,22 @@ The main script is `Wilko Koolbox v3.6.ps1`.
 ## Requirements
 - Windows 10 or Windows 11.
 - Windows PowerShell 5.1 or newer.
-- The script verifies elevation at startup and stops if it is not elevated. Start it with **Run as administrator** and approve the Windows UAC prompt.
+- When run as a raw `.ps1` file, the script automatically relaunches itself with elevation and displays a Windows UAC prompt. Compiled executables use ps2exe's `-RequireAdmin` behavior.
 - Internet access for package installation and updates.
 - `winget` / App Installer for package-related tasks.
 - Access to the PowerShell Gallery only when using the compile option for the first time; it installs `ps2exe` for the current user.
 ## Installation
 1. Download or clone this repository.
 2. Keep `Wilko Koolbox v3.6.ps1` in a local folder. The script writes logs outside the repository by default.
-3. Open the script’s folder in File Explorer, right-click PowerShell or Windows Terminal, and choose **Run as administrator**.
-4. Approve the UAC prompt, then start the script using the command in the next section.
+3. Open PowerShell or Windows Terminal normally and start the script using the command in the next section.
+4. Approve the UAC prompt when Koolbox relaunches itself with elevated permissions.
 
 ## Usage
-Run the script from an elevated PowerShell session:
+Run the script from PowerShell:
 
 ```powershell
 Set-ExecutionPolicy -Scope Process Bypass
-& "C:\Users\Administrator\WilkoKoolbox\Wilko Koolbox v3.6.ps1"
+& "C:\path\to\WilkoKoolbox\Wilko Koolbox v3.6.ps1"
 ```
 
 Enter a single menu key, a comma-separated set of keys such as `4,5,8`, or `A` to run installation tasks 1–10. Press `Q` from the main menu to exit.

@@ -10,8 +10,15 @@
 param()
 
 if (-not ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
-    Write-Host "`n[!] ERROR: Please run as Administrator." -ForegroundColor Red
-    Start-Sleep 3; Exit
+    if ($PSCommandPath) {
+        # Raw script: relaunch ourselves elevated via UAC prompt
+        Start-Process powershell.exe -Verb RunAs -ArgumentList @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', "`"$PSCommandPath`"")
+    } else {
+        # Compiled EXE path (should not occur; ps2exe -RequireAdmin handles it)
+        Write-Host "`n[!] ERROR: Please run as Administrator." -ForegroundColor Red
+        Start-Sleep 3
+    }
+    Exit
 }
 
 $script:LoggingEnabled = $true
