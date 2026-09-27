@@ -68,7 +68,7 @@ If none of these locations can be written, logging is disabled with a warning an
 ## Important behavior and reset
 - Package installers may open their own windows or require a first-launch setup step. In particular, install Android build tools, NDK, and CMake from Android Studio's SDK Manager after its first launch.
 - GHelper remains the source of truth for its hardware-level CPU, GPU, and fan profiles. The performance task changes only the Windows-side power plan.
-- The reset action restores the registry values, compatibility scheduled tasks, and the Balanced Windows power plan managed by Koolbox.
+- The reset action removes Koolbox-managed registry policies and feature values, re-enables compatibility scheduled tasks, and selects the Balanced Windows power plan.
 - Review each option before running it, especially the system, ASUS, telemetry, and reset actions.
 
 ## Reset limitations
