@@ -1,7 +1,10 @@
-# Wilko Koolbox v3.6
+# Wilko Koolbox v3.7
 Wilko Koolbox is an elevated PowerShell menu for configuring a Windows development and gaming workstation. It combines optional system preferences, developer-tool installation, game-engine setup, runtime installation, power-profile configuration, package management, and basic hardware monitoring.
 
 The main script is `Wilko Koolbox v3.6.ps1`.
+## What's new in v3.7
+- Adds the Vendor Bloat Module: one `V` menu action detects ASUS, HP, Dell, Lenovo, MSI, or Acer hardware and disables only the matching OEM services.
+- Each vendor check self-skips when its hardware manufacturer is not detected, so the same action is safe to run across supported vendors.
 ## What's new in v3.6
 - Reconciles the repository with the canonical v3.5 Koolbox source while preserving its full menu, system-task, performance, status-panel, and hardware-monitor functionality.
 - Adds resilient activity logging: Koolbox tries the Desktop first, then `%LOCALAPPDATA%\WilkoKoolbox`, then `%TEMP%`; it disables logging gracefully if no destination is writable.
@@ -50,6 +53,7 @@ Enter a single menu key, a comma-separated set of keys such as `4,5,8`, or `A` t
 - `1` — Disable automatic driver delivery and consumer-feature suggestions.
 - `2` — Block WPBT execution and disable detected ASUS services.
 - `3` — Configure telemetry policies, selected services, and compatibility tasks.
+- `V` — Auto-detect the system manufacturer and remove matching ASUS, HP, Dell, Lenovo, MSI, or Acer OEM bloat services.
 - `4` — Install Git, Wget, cURL, and VS Code.
 - `5` — Install Python 3.12.
 - `6` — Install Android Platform Tools and Android Studio.

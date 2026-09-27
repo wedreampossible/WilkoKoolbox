@@ -1,11 +1,12 @@
 # ============================================================
-#  WILKO KOOLBOX v3.6 - All-In-One Dev & Gaming Environment
+#  WILKO KOOLBOX v3.7 - All-In-One Dev & Gaming Environment
 #  PS 5.1 | GHelper-aware | Triple-layer power detection
-#  Changelog v3.6:
+#  Changelog v3.7:
 #   - Retains v3.5 canonical features and task flow
 #   - Adds resilient Desktop -> LOCALAPPDATA -> TEMP logging fallback
 #   - Adds checked Winget availability and boolean operation results
 #   - Keeps braced task interpolation in error messages
+#   - Adds vendor bloat auto-detection for ASUS, HP, Dell, Lenovo, MSI, and Acer
 # ============================================================
 param()
 
@@ -141,12 +142,13 @@ Initialize-Logging
 function Show-Menu {
     Clear-Host
     Write-Host '=========================================================' -ForegroundColor Cyan
-    Write-Host '                  WILKO KOOLBOX v3.6                     ' -ForegroundColor White
+    Write-Host '                  WILKO KOOLBOX v3.7                     ' -ForegroundColor White
     Write-Host '        All-In-One Dev & Gaming Environment Builder      ' -ForegroundColor DarkGray
     Write-Host '=========================================================' -ForegroundColor Cyan
     Write-Host ' [1]  System : Disable Driver Auto-Installs & Bloatware'
     Write-Host ' [2]  System : Block ASUS Services & WPBT BIOS Injections'
     Write-Host ' [3]  System : Block Telemetry & Compatibility Appraiser'
+    Write-Host ' [V]  Vendor : Auto-Detect & Remove OEM Bloat (HP/Dell/Lenovo/MSI/Acer/ASUS)'
     Write-Host ' [4]  Dev    : Install Git, Wget, cURL, VS Code'
     Write-Host ' [5]  Dev    : Install Python 3.12'
     Write-Host ' [6]  Dev    : Android Suite (Platform Tools, Studio, SDK)'
@@ -209,6 +211,57 @@ function Task-ASUS {
     if (-not $svcs) { Write-Host '     [i] No ASUS services detected' -ForegroundColor DarkGray }
     Write-Host ' [OK] WPBT execution blocked, ASUS services disabled' -ForegroundColor Green
     Write-Log 'Task 2: WPBT execution blocked, ASUS services disabled'
+}
+# ---------- Vendor Bloat Module (v3.7) ----------
+function Get-MachineManufacturer {
+    $mfg = (Get-CimInstance Win32_ComputerSystem).Manufacturer
+    if ([string]::IsNullOrWhiteSpace($mfg)) { return 'Unknown' }
+    return ($mfg -replace '\s+', ' ').Trim()
+}
+
+function Test-VendorDetected {
+    param([Parameter(Mandatory)][string]$VendorPattern)
+    return (Get-MachineManufacturer) -match "(?i)$VendorPattern"
+}
+
+function Disable-VendorServices {
+    param(
+        [Parameter(Mandatory)][string]$VendorName,
+        [Parameter(Mandatory)][string[]]$ServiceNames
+    )
+    if (-not (Test-VendorDetected $VendorName)) {
+        Write-Host "     [i] $VendorName hardware not detected - skipping" -ForegroundColor Gray
+        Write-Log "VendorTask: $VendorName skipped (hardware not detected)"
+        return
+    }
+    $found = 0
+    foreach ($svc in $ServiceNames) {
+        $service = Get-Service -Name $svc -ErrorAction SilentlyContinue
+        if ($service) {
+            Stop-Service -Name $svc -Force -ErrorAction SilentlyContinue
+            Set-Service -Name $svc -StartupType Disabled -ErrorAction SilentlyContinue
+            Write-Host "     [i] Disabled: $($service.Name)" -ForegroundColor DarkGray
+            Write-Log "VendorTask: $($service.Name) disabled"
+            $found++
+        }
+    }
+    if ($found -eq 0) {
+        Write-Host "     [i] No $VendorName bloat services found" -ForegroundColor DarkGray
+    } else {
+        Write-Host " [OK] $VendorName bloat disabled ($found services)" -ForegroundColor Green
+        Write-Log "VendorTask: $VendorName complete ($found services)"
+    }
+}
+
+function Task-VendorBloat {
+    $mfg = Get-MachineManufacturer
+    Write-Host " [i] Detected manufacturer: $mfg" -ForegroundColor Cyan
+    Disable-VendorServices -VendorName 'ASUS|ASUSTeK' -ServiceNames @('ArmouryCrateControlInterface','AsusAppService')
+    Disable-VendorServices -VendorName 'HP|Hewlett-Packard' -ServiceNames @('HpTouchpointAnalyticsService','HPAppHelperCap','HPDiagsCap','HPSysInfoCap','hpsysdrv')
+    Disable-VendorServices -VendorName 'Dell' -ServiceNames @('Dell SupportAssistAgent','DellTechHub','DPMConnector','DellDigitalDelivery','SupportAssistAgent')
+    Disable-VendorServices -VendorName 'Lenovo' -ServiceNames @('ImControllerService','LenovoVantageService','LenovoUtilityService')
+    Disable-VendorServices -VendorName 'MSI|Micro-Star' -ServiceNames @('MSIService','MSI_Center_Service')
+    Disable-VendorServices -VendorName 'Acer' -ServiceNames @('Acer Care Center Service','AcerJumpStart','Acer Quick Access')
 }
 
 function Task-Telemetry {
@@ -419,6 +472,7 @@ function Task-Status {
     foreach ($s in $svcList) { if ($s.Status -eq 'Running') { $asusRunning++ } }
     Write-Host ' ASUS services: ' -NoNewline
     if ($asusRunning -gt 0) { Write-Host "$asusRunning still RUNNING (run task 2)" -ForegroundColor Red } else { Write-Host ' none running / none found' -ForegroundColor Green }
+    Write-Host (' Detected manufacturer: {0}' -f (Get-MachineManufacturer))
 
     $telem = Get-RegVal 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\DataCollection' 'AllowTelemetry'
     Write-Host ' Telemetry policy: ' -NoNewline
@@ -531,6 +585,7 @@ function Invoke-Choice($act) {
         '1'  { Task-Drivers }
         '2'  { Task-ASUS }
         '3'  { Task-Telemetry }
+        'V'  { Task-VendorBloat }
         '4'  { Task-DevBasics }
         '5'  { Task-Python }
         '6'  { Task-Android }
@@ -550,6 +605,7 @@ $actions = [ordered]@{
     "1"  = @{ Name = "Disable Driver Auto-Installs & Bloatware";   Cmd = { Task-Drivers } }
     "2"  = @{ Name = "Block ASUS Services & WPBT BIOS Injections"; Cmd = { Task-ASUS } }
     "3"  = @{ Name = "Block Telemetry & Compatibility Appraiser"; Cmd = { Task-Telemetry } }
+    "V"  = @{ Name = "Vendor Bloat Removal";                       Cmd = { Task-VendorBloat } }
     "4"  = @{ Name = "Install Dev Basics";                       Cmd = { Task-DevBasics } }
     "5"  = @{ Name = "Install Python 3.12";                      Cmd = { Task-Python } }
     "6"  = @{ Name = "Android Suite (Platform Tools, Studio)";   Cmd = { Task-Android } }
