@@ -12,7 +12,12 @@ param()
 if (-not ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
     if ($PSCommandPath) {
         # Raw script: relaunch ourselves elevated via UAC prompt
-        Start-Process powershell.exe -Verb RunAs -ArgumentList @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', "`"$PSCommandPath`"")
+        try {
+            Start-Process powershell.exe -Verb RunAs -ArgumentList @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', "`"$PSCommandPath`"")
+        } catch {
+            Write-Host "`n[!] Elevation declined or blocked. Exiting." -ForegroundColor Red
+            Start-Sleep 2
+        }
     } else {
         # Compiled EXE path (should not occur; ps2exe -RequireAdmin handles it)
         Write-Host "`n[!] ERROR: Please run as Administrator." -ForegroundColor Red
@@ -214,8 +219,10 @@ function Task-Telemetry {
         Set-Service -Name $_ -StartupType Disabled -ErrorAction SilentlyContinue
         Write-Host "     [i] Stopped: $_" -ForegroundColor DarkGray
     }
-    schtasks /change /tn "\Microsoft\Windows\Application Experience\Microsoft Compatibility Appraiser" /disable 2>$null | Out-Null
-    schtasks /change /tn "\Microsoft\Windows\Application Experience\ProgramDataUpdater" /disable 2>$null | Out-Null
+    foreach ($task in '\Microsoft\Windows\Application Experience\Microsoft Compatibility Appraiser', '\Microsoft\Windows\Application Experience\ProgramDataUpdater') {
+        schtasks /change /tn $task /disable 2>$null | Out-Null
+        if ($LASTEXITCODE -ne 0) { Write-Log "Could not disable scheduled task: $task (exit $LASTEXITCODE)" }
+    }
     Write-Host ' [OK] Telemetry services/stops + scheduled tasks disabled' -ForegroundColor Green
     Write-Log 'Task 3: Telemetry (registry + services + tasks) disabled'
 }
@@ -325,10 +332,17 @@ function Task-Specs {
     Write-Host (' CPU: {0} ({1} cores / {2} threads)' -f $cpu.Name.Trim(), $cpu.NumberOfCores, $cpu.NumberOfLogicalProcessors)
     foreach ($g in $gpus) {
         $vram = $null
-        try {
-            $regKey = Get-ItemProperty -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}\0000' -ErrorAction SilentlyContinue
-            if ($regKey -and $regKey.'HardwareInformation.qwMemorySize') { $vram = [math]::Round($regKey.'HardwareInformation.qwMemorySize' / 1GB) }
-        } catch { }
+        $idx = 0
+        while ($idx -lt 8) {
+            try {
+                $regKey = Get-ItemProperty -Path ('HKLM:\SYSTEM\CurrentControlSet\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}\{0:d4}' -f $idx) -ErrorAction Stop
+                if ($regKey.DriverDesc -and $regKey.DriverDesc.Trim() -eq $g.Name.Trim() -and $regKey.'HardwareInformation.qwMemorySize') {
+                    $vram = [math]::Round($regKey.'HardwareInformation.qwMemorySize' / 1GB)
+                    break
+                }
+            } catch { }
+            $idx++
+        }
         if ($vram) { Write-Host (' GPU: {0} ({1} GB VRAM)' -f $g.Name.Trim(), $vram) }
         else       { Write-Host (' GPU: {0}' -f $g.Name.Trim()) }
     }
