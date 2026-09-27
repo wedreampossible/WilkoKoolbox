@@ -418,7 +418,7 @@ function Task-Specs {
             $idx = 0
             while ($idx -lt 16) {
                 try {
-                    $regKey = Get-ItemProperty -LiteralPath ('HKLM:\SYSTEM\CurrentControlSet\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}\{0:d4}' -f $idx) -ErrorAction Stop
+                    $regKey = Get-ItemProperty -LiteralPath ('HKLM:\SYSTEM\CurrentControlSet\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}\' + $idx.ToString('d4')) -ErrorAction Stop
                     $desc = "$($regKey.DriverDesc)".Trim()
                     if ($desc -and ($desc -like "*$cleanName*" -or $cleanName -like "*$desc*")) {
                         $rawQw = $regKey.'HardwareInformation.qwMemorySize'
