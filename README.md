@@ -2,6 +2,11 @@
 Wilko Koolbox is an elevated PowerShell menu for configuring a Windows development and gaming workstation. It combines optional system preferences, developer-tool installation, game-engine setup, runtime installation, power-profile configuration, package management, and basic hardware monitoring.
 
 The main script is `Wilko Koolbox v3.6.ps1`.
+## What's new in v3.6
+- Reconciles the repository with the canonical v3.5 Koolbox source while preserving its full menu, system-task, performance, status-panel, and hardware-monitor functionality.
+- Adds resilient activity logging: Koolbox tries the Desktop first, then `%LOCALAPPDATA%\WilkoKoolbox`, then `%TEMP%`; it disables logging gracefully if no destination is writable.
+- Adds a checked `Invoke-Winget` wrapper that verifies `winget` is available, returns a success/failure result, and logs package-operation failures.
+- Retains the elevation guard, registry-based installed-app detection, find-existing-first Ultimate Performance handling, locale-tolerant GUID parsing, and all 10 status-panel package checks.
 
 ## Features
 - Disables Windows driver searching, Windows Update driver delivery, and consumer-feature suggestions.
@@ -25,19 +30,21 @@ The main script is `Wilko Koolbox v3.6.ps1`.
 - Internet access for package installation and updates.
 - `winget` / App Installer for package-related tasks.
 - Access to the PowerShell Gallery only when using the compile option for the first time; it installs `ps2exe` for the current user.
+## Installation
+1. Download or clone this repository.
+2. Keep `Wilko Koolbox v3.6.ps1` in a local folder. The script writes logs outside the repository by default.
+3. Open the script’s folder in File Explorer, right-click PowerShell or Windows Terminal, and choose **Run as administrator**.
+4. Approve the UAC prompt, then start the script using the command in the next section.
 
 ## Usage
-1. Save `Wilko Koolbox v3.6.ps1` locally.
-2. Open PowerShell as Administrator.
-3. Run the script:
+Run the script from an elevated PowerShell session:
 
 ```powershell
 Set-ExecutionPolicy -Scope Process Bypass
 & "C:\Users\Administrator\WilkoKoolbox\Wilko Koolbox v3.6.ps1"
 ```
 
-4. Enter a single menu key, a comma-separated set of keys such as `4,5,8`, or `A` to run installation tasks 1–10.
-5. Press `Q` from the main menu to exit.
+Enter a single menu key, a comma-separated set of keys such as `4,5,8`, or `A` to run installation tasks 1–10. Press `Q` from the main menu to exit.
 
 ## Main-menu reference
 - `1` — Disable automatic driver delivery and consumer-feature suggestions.
