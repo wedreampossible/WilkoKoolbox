@@ -69,5 +69,12 @@ If none of these locations can be written, logging is disabled with a warning an
 - Package installers may open their own windows or require a first-launch setup step. In particular, install Android build tools, NDK, and CMake from Android Studio's SDK Manager after its first launch.
 - GHelper remains the source of truth for its hardware-level CPU, GPU, and fan profiles. The performance task changes only the Windows-side power plan.
 - The reset action restores the registry values, compatibility scheduled tasks, and the Balanced Windows power plan managed by Koolbox.
-- Reset deliberately does **not** restore startup types for services that were disabled. Restore those manually only if you want the associated ASUS or telemetry components to run again.
 - Review each option before running it, especially the system, ASUS, telemetry, and reset actions.
+
+## Reset limitations
+The `R` action does not recreate the system's pre-Koolbox configuration; it reverses only settings that the script can safely identify.
+
+- Driver search is set back to the Windows default value used by Koolbox (`SearchOrderConfig = 1`).
+- The Koolbox Windows Update, consumer-feature, WPBT, telemetry, Game Mode, and Game DVR registry values are removed.
+- The two compatibility scheduled tasks are re-enabled, and the Windows Balanced power plan is selected.
+- **Disabled services are not re-enabled and their prior startup types are not restored.** This applies to the selected ASUS services and telemetry services. If you want a component to run again, restore the appropriate service configuration manually through Services, an OEM utility, or your organization’s standard configuration process.
