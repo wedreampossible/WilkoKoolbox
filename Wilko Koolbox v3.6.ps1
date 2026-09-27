@@ -95,6 +95,12 @@ function Invoke-Winget {
         Write-Log "$verb SUCCESS: $Id"
         return $true
     }
+    $benignCodes = @(0, -1978335189, -1978334956, -1978335182)  # no-op / already installed / no upgrade
+    if ($LASTEXITCODE -in $benignCodes) {
+        Write-Host "     [i] $Id already installed / up to date" -ForegroundColor Gray
+        Write-Log "$verb NO-OP (already current): $Id"
+        return $true
+    }
 
     Write-Host "     [!] $Id returned exit code $LASTEXITCODE" -ForegroundColor Yellow
     Write-Log "$verb FAILED: $Id (exit $LASTEXITCODE)"
@@ -118,6 +124,16 @@ function Set-Reg($path, $name, $value) {
 function Test-GHelper {
     return ($null -ne (Get-Process -Name 'GHelper' -ErrorAction SilentlyContinue))
 }
+function Get-GHelperMode {
+    $cfg = Join-Path $env:APPDATA 'GHelper\config.json'
+    if (-not (Test-Path -LiteralPath $cfg)) { return $null }
+    try {
+        $json = Get-Content -LiteralPath $cfg -Raw | ConvertFrom-Json
+        $names = @('Balanced', 'Turbo', 'Silent')
+        if ($null -ne $json.mode -and $json.mode -ge 0 -and $json.mode -le 2) { return $names[[int]$json.mode] }
+    } catch { }
+    return $null
+}
 
 function Get-ActivePlanName {
     $line = (powercfg /getactivescheme | Out-String).Trim()
@@ -133,6 +149,16 @@ function Find-InstalledApp($displayName) {
     $entries = Get-ItemProperty -Path $paths -ErrorAction SilentlyContinue
     foreach ($e in $entries) {
         if ($e.DisplayName -and $e.DisplayName.StartsWith($displayName)) { return $e }
+    }
+    return $null
+}
+
+function Find-InstalledAppLike($pattern) {
+    $paths = @('HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall\*',
+              'HKLM:\Software\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*',
+              'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\*')
+    foreach ($e in (Get-ItemProperty -Path $paths -ErrorAction SilentlyContinue)) {
+        if ($e.DisplayName -and ($e.DisplayName -like "*$pattern*")) { return $e }
     }
     return $null
 }
@@ -344,7 +370,15 @@ function Task-Performance {
     # Extract GUID by regex (format/locale-proof)
     $guid = (($existingPlan -split '\s+') -match '^[a-f0-9-]{36}$')[0]
     if (-not $guid) {
-        Write-Host ' [!] Could not locate/create Ultimate Performance plan' -ForegroundColor Red
+        if (Test-GHelper) {
+            Write-Host ' [i] Ultimate Performance plan unavailable on this OS image - GHelper governs hardware performance anyway.' -ForegroundColor Cyan
+        } else {
+            Write-Host ' [!] Could not locate/create Ultimate Performance plan' -ForegroundColor Yellow
+        }
+        Write-Log "Task 10: power plan unavailable (GHelper active: $(Test-GHelper)); Game Mode/DVR settings still applied"
+        Set-Reg 'HKCU:\Software\Microsoft\GameBar' 'AutoGameModeEnabled' 1
+        Set-Reg 'HKCU:\System\GameConfigStore' 'GameDVR_Enabled' 0
+        Write-Host ' [OK] Game Mode enabled, Game DVR disabled.' -ForegroundColor Green
         return
     }
     powercfg /setactive $guid
@@ -385,13 +419,15 @@ function Task-Specs {
     Write-Host (' CPU: {0} ({1} cores / {2} threads)' -f $cpu.Name.Trim(), $cpu.NumberOfCores, $cpu.NumberOfLogicalProcessors)
     foreach ($g in $gpus) {
         $vram = $null
+        $cleanName = $g.Name.Trim()
         $idx = 0
-        while ($idx -lt 8) {
+        while ($idx -lt 16) {
             try {
                 $regKey = Get-ItemProperty -Path ('HKLM:\SYSTEM\CurrentControlSet\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}\{0:d4}' -f $idx) -ErrorAction Stop
-                if ($regKey.DriverDesc -and $regKey.DriverDesc.Trim() -eq $g.Name.Trim() -and $regKey.'HardwareInformation.qwMemorySize') {
-                    $vram = [math]::Round($regKey.'HardwareInformation.qwMemorySize' / 1GB)
-                    break
+                $desc = "$($regKey.DriverDesc)".Trim()
+                if ($desc -and $cleanName -and ($desc -like "*$cleanName*" -or $cleanName -like "*$desc*")) {
+                    if ($regKey.'HardwareInformation.qwMemorySize') { $vram = [math]::Round($regKey.'HardwareInformation.qwMemorySize' / 1GB); break }
+                    if ($regKey.'HardwareInformation.MemorySize')   { $vram = [math]::Round($regKey.'HardwareInformation.MemorySize' / 1GB); break }
                 }
             } catch { }
             $idx++
@@ -406,7 +442,11 @@ function Task-Specs {
 
     Write-Host "`n POWER LAYERS" -ForegroundColor Magenta
     Write-Host ' Performance manager: ' -NoNewline
-    if (Test-GHelper) { Write-Host 'GHelper (active)' -ForegroundColor Green } else { Write-Host 'Windows native' -ForegroundColor Yellow }
+    if (Test-GHelper) {
+        $ghMode = Get-GHelperMode
+        if ($ghMode) { Write-Host "GHelper (active, $ghMode profile - firmware level)" -ForegroundColor Green }
+        else         { Write-Host 'GHelper (active - firmware level)' -ForegroundColor Green }
+    } else { Write-Host 'Windows native' -ForegroundColor Yellow }
     Write-Host (' Windows power scheme: {0}' -f (Get-ActivePlanName))
     Write-Host ' Windows power slider (overlay): Settings > System > Power' -ForegroundColor DarkGray
 
@@ -416,23 +456,30 @@ function Task-Specs {
     try { $null = [Console]::KeyAvailable } catch { $interactive = $false }
     if (-not $interactive) { Write-Host ' (Console not interactive - press Ctrl+C to stop)' -ForegroundColor DarkGray }
 
-    while ($true) {
+    $nextSample = (Get-Date)
+    :monitor while ($true) {
         if ($interactive -and [Console]::KeyAvailable) {
             $k = [Console]::ReadKey($true)
             if ($k.Key -eq 'Q' -or $k.Key -eq 'Escape') { break }
         }
-        $cpuLoad = 0
-        try {
-            $c = Get-Counter '\Processor(_Total)\% Processor Time' -ErrorAction Stop
-            $cpuLoad = [math]::Round($c.CounterSamples[0].CookedValue)
-        } catch { $cpuLoad = -1 }
-        $os2 = Get-CimInstance Win32_OperatingSystem
-        $freePct = [math]::Round(($os2.FreePhysicalMemory / $os2.TotalVisibleMemorySize) * 100)
-        $stamp = Get-Date -Format 'HH:mm:ss'
-        if ($cpuLoad -ge 0) { Write-Host ("  CPU {0,3}%  |  Free RAM {1,3}%  |  {2}" -f $cpuLoad, $freePct, $stamp) }
-        else                { Write-Host ("  CPU  n/a |  Free RAM {0,3}%  |  {1}" -f $freePct, $stamp) }
-        Start-Sleep -Seconds 2
+        if ((Get-Date) -ge $nextSample) {
+            $cpuLoad = 0
+            try {
+                $c = Get-Counter '\Processor(_Total)\% Processor Time' -ErrorAction Stop
+                $cpuLoad = [math]::Round($c.CounterSamples[0].CookedValue)
+            } catch { $cpuLoad = -1 }
+            $os2 = Get-CimInstance Win32_OperatingSystem
+            $freePct = [math]::Round(($os2.FreePhysicalMemory / $os2.TotalVisibleMemorySize) * 100)
+            $stamp = Get-Date -Format 'HH:mm:ss'
+            $line = if ($cpuLoad -ge 0) { (' CPU {0,3}%  |  Free RAM {1,3}%  |  {2}  ' -f $cpuLoad, $freePct, $stamp) }
+                    else              { (' CPU  n/a |  Free RAM {0,3}%  |  {1}  ' -f $freePct, $stamp) }
+            [Console]::Write("`r{0,-70}" -f $line)
+            $nextSample = (Get-Date).AddSeconds(2)
+        }
+        Start-Sleep -Milliseconds 150
     }
+    [Console]::WriteLine('')
+    Write-Host ' [i] Monitor stopped - returning to menu' -ForegroundColor DarkGray
     Write-Log 'Task 11: Specs and monitor displayed'
 }
 
@@ -490,7 +537,9 @@ function Task-Status {
         Write-Host "$plan (run task 10 for Ultimate Performance)" -ForegroundColor Yellow
     }
     if ($ghelperOn) {
-        Write-Host ' Performance manager: GHelper (active) - Turbo/fans/CPU at firmware level' -ForegroundColor Green
+        $ghMode = Get-GHelperMode
+        if ($ghMode) { Write-Host " Performance manager: GHelper (active, $ghMode profile - firmware level)" -ForegroundColor Green }
+        else         { Write-Host ' Performance manager: GHelper (active - firmware level)' -ForegroundColor Green }
         Write-Host ' Info: the Settings > Power slider is a separate layer ON TOP of the scheme.' -ForegroundColor DarkGray
         Write-Host '       Balanced + Best Performance + GHelper Turbo = max perf anyway.' -ForegroundColor DarkGray
     }
@@ -505,7 +554,7 @@ function Task-Status {
         @{ id='Python';    test={ $null -ne (Get-Command python -ErrorAction SilentlyContinue) } },
         @{ id='adb (Android Platform Tools)'; test={ $null -ne (Get-Command adb -ErrorAction SilentlyContinue) } },
         @{ id='Android Studio'; test={ Test-Path 'C:\Program Files\Android\Android Studio\bin\studio64.exe' } },
-        @{ id='Unity Hub'; test={ $null -ne (Find-InstalledApp 'Unity Hub') } },
+        @{ id='Unity (Hub/Editor)'; test={ ($null -ne (Find-InstalledAppLike 'Unity')) -or (Test-Path "$env:LOCALAPPDATA\Programs\Unity Hub\Unity Hub.exe") -or (Test-Path "C:\Program Files\Unity Hub\Unity Hub.exe") } },
         @{ id='Godot Engine'; test={ ($null -ne (Get-Command godot -ErrorAction SilentlyContinue)) -or ($null -ne (Find-InstalledApp 'Godot')) } },
         @{ id='VS Code';   test={ $null -ne (Get-Command code -ErrorAction SilentlyContinue) } },
         @{ id='Visual Studio 2022'; test={ Test-Path 'C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\IDE\devenv.exe' } }
