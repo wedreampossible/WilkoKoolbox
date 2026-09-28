@@ -1,4 +1,7 @@
 # Wilko Koolbox v3.7
+
+## Quick Start
+Download Run-Koolbox.bat and the .ps1 into the same folder, double-click Run-Koolbox.bat, approve the UAC prompt, and the menu appears. Alternative: right-click the .ps1 and choose Run with PowerShell.
 Wilko Koolbox is an elevated PowerShell menu for configuring a Windows development and gaming workstation. It combines optional system preferences, developer-tool installation, game-engine setup, runtime installation, power-profile configuration, package management, and basic hardware monitoring.
 
 The main script is `Wilko Koolbox v3.6.ps1`.
